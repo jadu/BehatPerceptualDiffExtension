@@ -1,0 +1,5 @@
+example/pdiffs
+example/behat.yml
+example/report.html
+vendor
+composer.lock

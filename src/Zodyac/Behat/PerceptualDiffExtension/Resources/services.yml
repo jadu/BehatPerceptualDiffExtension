@@ -1,0 +1,18 @@
+parameters:
+    behat.perceptual_diff_extension.formatter.dispatcher.html.class: "Zodyac\\Behat\\PerceptualDiffExtension\\Formatter\\HtmlFormatterDispatcher"
+    behat.perceptual_diff_extension.formatter.html.class: "Zodyac\\Behat\\PerceptualDiffExtension\\Formatter\\HtmlFormatter"
+
+services:
+    behat.perceptual_diff_extension.listener.screenshot:
+        class: Zodyac\Behat\PerceptualDiffExtension\Listener\ScreenshotListener
+        arguments: [%behat.perceptual_diff.path%, %behat.perceptual_diff.sleep%, %behat.perceptual_diff.compare%]
+        tags:
+            - { name: behat.event_subscriber }
+
+    behat.perceptual_diff_extension.formatter.dispatcher.html:
+        class: %behat.perceptual_diff_extension.formatter.dispatcher.html.class%
+        arguments: [%behat.perceptual_diff_extension.formatter.html.class%, "html"]
+        calls:
+            - [setListener, [@behat.perceptual_diff_extension.listener.screenshot]]
+        tags:
+            - { name: behat.formatter.dispatcher }

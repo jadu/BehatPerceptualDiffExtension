@@ -1,0 +1,281 @@
+<?php
+
+namespace Zodyac\Behat\PerceptualDiffExtension\Listener;
+
+use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpKernel\KernelInterface;
+use Behat\Behat\Context\ContextInterface;
+use Behat\Behat\Event\ScenarioEvent;
+use Behat\Behat\Event\SuiteEvent;
+use Behat\Behat\Event\StepEvent;
+use Behat\Gherkin\Node\StepNode;
+
+class ScreenshotListener implements EventSubscriberInterface
+{
+    /**
+     * Base path
+     *
+     * @var string
+     */
+    protected $path;
+
+    /**
+     * Amount of time in seconds to sleep before taking a screenshot.
+     *
+     * @var int
+     */
+    protected $sleep;
+
+    /**
+     * Options passed to the `compare` call.
+     *
+     * @var array
+     */
+    protected $compareOptions;
+
+    /**
+     * When the suite was started.
+     *
+     * @var \DateTime
+     */
+    protected $started;
+
+    /**
+     * The scenario currently being tested.
+     *
+     * @var ScenarioNode
+     */
+    protected $currentScenario;
+
+    /**
+     * Current step (reset for each scenario)
+     *
+     * @var int
+     */
+    protected $stepNumber;
+
+    /**
+     * Diff results
+     *
+     * @var array
+     */
+    protected $diffs = array();
+
+    public function __construct($path, $sleep, array $compareOptions)
+    {
+        $this->path = rtrim($path, '/') . '/';
+        $this->sleep = (int) $sleep;
+        $this->compareOptions = $compareOptions;
+        $this->started = new \DateTime();
+    }
+
+    public static function getSubscribedEvents()
+    {
+        return array(
+            'beforeSuite' => 'clearScreenshotDiffs',
+            'beforeScenario' => 'resetStepCounter',
+            'afterStep' => 'takeScreenshot'
+        );
+    }
+
+    public function getStepDiff(StepNode $step)
+    {
+        $hash = spl_object_hash($step);
+
+        if (isset($this->diffs[$hash])) {
+            return $this->diffs[$hash];
+        }
+    }
+
+    public function getDiffs()
+    {
+        return $this->diffs;
+    }
+
+    public function getScreenshotPath()
+    {
+        return $this->path . $this->started->format('YmdHis') . '/';
+    }
+
+    public function getBaselinePath()
+    {
+        return $this->path . 'baseline/';
+    }
+
+    public function getDiffPath()
+    {
+        return $this->path . 'diff/';
+    }
+
+    /**
+     * Remove all the previous diffs
+     */
+    public function clearScreenshotDiffs()
+    {
+        $diffPath = $this->getDiffPath();
+        if (is_dir($diffPath)) {
+            $this->removeDirectory($diffPath);
+        }
+    }
+
+    /**
+     * Keep track of the current scenario and step number for use in the file name
+     *
+     * @param ScenarioEvent $event
+     */
+    public function resetStepCounter(ScenarioEvent $event)
+    {
+        $this->currentScenario = $event->getScenario();
+        $this->stepNumber = 0;
+    }
+
+    /**
+     * Takes a screenshot if the step passes and compares it to the baseline
+     *
+     * @param StepEvent $event
+     */
+    public function takeScreenshot(StepEvent $event)
+    {
+        // Increment the step number
+        $this->stepNumber++;
+
+        if ($event->getResult() !== StepEvent::PASSED) {
+            // Don't screenshot failed steps
+            return;
+        }
+
+        if ($this->sleep > 0) {
+            // Convert seconds to microseconds
+            usleep($this->sleep * 1000000);
+        }
+
+        $screenshotPath = $this->getScreenshotPath();
+        $screenshotFile = $screenshotPath . $this->getFilepath($event);
+        $this->ensureDirectoryExists($screenshotFile);
+
+        // Save the screenshot
+        file_put_contents($screenshotFile, $event->getContext()->getSession()->getScreenshot());
+
+        // Comparison
+        $baselinePath = $this->getBaselinePath();
+        $diffPath = $this->getDiffPath();
+
+        $baselineFile = str_replace($screenshotPath, $baselinePath, $screenshotFile);
+        if (!is_file($baselineFile)) {
+            $this->ensureDirectoryExists($baselineFile);
+
+            // New step, move into the baseline but return as there is no need for a comparison
+            copy($screenshotFile, $baselineFile);
+            return;
+        }
+
+        // Output the comparison to a temp file
+        $tempFile = $this->path . '/temp.png';
+
+        // Run the comparison
+        $output = array();
+        exec($this->getCompareCommand($baselineFile, $screenshotFile, $tempFile), $output, $return);
+
+        if ($return === 0) {
+            // Check that there are some differences
+            if ($output[0] > 0) {
+                $diffFile = str_replace($screenshotPath, $diffPath, $screenshotFile);
+                $this->ensureDirectoryExists($diffFile);
+
+                // Store the diff
+                rename($tempFile, $diffFile);
+
+                // Record the diff for output
+                $this->diffs[spl_object_hash($event->getStep())] = $this->getFilepath($event);
+            } elseif (is_file($tempFile)) {
+                // Clean up the temp file
+                unlink($tempFile);
+            }
+        }
+    }
+
+    /**
+     * Ensure the directory where the file will be saved exists.
+     *
+     * @param string $file
+     * @return boolean Returns true if the directory exists and false if it could not be created
+     */
+    protected function ensureDirectoryExists($file)
+    {
+        $dir = dirname($file);
+        if (!is_dir($dir)) {
+            return mkdir($dir, 0777, true);
+        }
+
+        return true;
+    }
+
+    /**
+     * Recursively removes a directory and it's contents.
+     *
+     * @param string $path
+     * @return boolean
+     */
+    protected function removeDirectory($path)
+    {
+        $dir = new \DirectoryIterator($path);
+        foreach ($dir as $fileinfo) {
+            if ($fileinfo->isFile() || $fileinfo->isLink()) {
+                unlink($fileinfo->getPathName());
+            } elseif (!$fileinfo->isDot() && $fileinfo->isDir()) {
+                $this->removeDirectory($fileinfo->getPathName());
+            }
+        }
+
+        return rmdir($path);
+    }
+
+    /**
+     * Returns the ImageMagick compare command with the correct arguments.
+     *
+     * @param string $baselineFile The baseline screenshot
+     * @param string $screenshotFile The screenshot to compare with
+     * @param string $tempFile The temp file to store the diff in (this will be deleted if there are no differences)
+     * @return string
+     */
+    protected function getCompareCommand($baselineFile, $screenshotFile, $tempFile)
+    {
+        return sprintf(
+            'compare -fuzz %d%% -metric %s -highlight-color %s %s %s %s 2>&1',
+            $this->compareOptions['fuzz'],
+            escapeshellarg($this->compareOptions['metric']),
+            escapeshellarg($this->compareOptions['highlight_color']),
+            escapeshellarg($baselineFile),
+            escapeshellarg($screenshotFile),
+            escapeshellarg($tempFile)
+        );
+    }
+
+    /**
+     * Returns the relative file path for the given feature/scenario/step
+     * @param StepEvent $event
+     * @return string
+     */
+    protected function getFilepath(StepEvent $event)
+    {
+        return sprintf('%s/%s/%d-%s.png',
+            $this->formatString($this->currentScenario->getFeature()->getTitle()),
+            $this->formatString($this->currentScenario->getTitle()),
+            $this->stepNumber,
+            $this->formatString($event->getStep()->getText())
+        );
+    }
+
+    /**
+     * Formats a title string into a filename friendly string
+     * @param string $string
+     * @return string
+     */
+    protected function formatString($string)
+    {
+        $string = preg_replace('/[^\w\s\-]/', '', $string);
+        $string = preg_replace('/[\s\-]+/', '-', $string);
+
+        return $string;
+    }
+}

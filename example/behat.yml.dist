@@ -1,0 +1,15 @@
+default:
+    extensions:
+        Behat\MinkExtension\Extension:
+            default_session: selenium2
+            browser_name: chrome
+            selenium2:
+                capabilities: { "version": "*" }
+                wd_host: http://127.0.0.1:4444/wd/hub
+        Zodyac\Behat\PerceptualDiffExtension\Extension:
+            sleep: 1.25
+            path: pdiffs
+            compare:
+                highlight_color: red
+                metric: AE
+                fuzz: 20
