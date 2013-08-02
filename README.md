@@ -10,7 +10,7 @@
 java -jar selenium-server-standalone-2.33.0.jar
 ```
 
-Install [ImageMagick](http://www.imagemagick.org/script/binary-releases.php)
+Install [ImageMagick](http://www.imagemagick.org/script/binary-releases.php) with [Homebrew](http://brew.sh/)
 
 ```sh
 brew install imagemagick
