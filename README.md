@@ -25,7 +25,7 @@ Install [ImageMagick](http://www.imagemagick.org/script/binary-releases.php) wit
 brew install imagemagick
 ```
 
-Install Composer dependencies
+Install [Composer](http://getcomposer.org/doc/00-intro.md#installation-nix) dependencies
 
 ```sh
 composer install --dev
