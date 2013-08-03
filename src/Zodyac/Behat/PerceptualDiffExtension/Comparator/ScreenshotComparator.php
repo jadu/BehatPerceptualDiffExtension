@@ -1,16 +1,13 @@
 <?php
 
-namespace Zodyac\Behat\PerceptualDiffExtension\Listener;
+namespace Zodyac\Behat\PerceptualDiffExtension\Comparator;
 
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Component\HttpKernel\KernelInterface;
 use Behat\Behat\Context\ContextInterface;
 use Behat\Behat\Event\ScenarioEvent;
-use Behat\Behat\Event\SuiteEvent;
-use Behat\Behat\Event\StepEvent;
 use Behat\Gherkin\Node\StepNode;
 
-class ScreenshotListener implements EventSubscriberInterface
+class ScreenshotComparator implements EventSubscriberInterface
 {
     /**
      * Base path
@@ -73,12 +70,18 @@ class ScreenshotListener implements EventSubscriberInterface
     {
         return array(
             'beforeSuite' => 'clearScreenshotDiffs',
-            'beforeScenario' => 'resetStepCounter',
-            'afterStep' => 'takeScreenshot'
+            'beforeScenario' => 'resetStepCounter'
         );
     }
 
-    public function getStepDiff(StepNode $step)
+    /**
+     * Returns the filename of the diff screenshot or null if
+     * there were no differecnes.
+     *
+     * @param StepNode $step
+     * @return string
+     */
+    public function getDiff(StepNode $step)
     {
         $hash = spl_object_hash($step);
 
@@ -87,21 +90,41 @@ class ScreenshotListener implements EventSubscriberInterface
         }
     }
 
+    /**
+     * Returns all of the diffs
+     *
+     * @return array
+     */
     public function getDiffs()
     {
         return $this->diffs;
     }
 
+    /**
+     * Returns the screenshot path
+     *
+     * @return string
+     */
     public function getScreenshotPath()
     {
         return $this->path . $this->started->format('YmdHis') . '/';
     }
 
+    /**
+     * Returns the baseline screenshot path
+     *
+     * @return string
+     */
     public function getBaselinePath()
     {
         return $this->path . 'baseline/';
     }
 
+    /**
+     * Returns the diff path
+     *
+     * @return string
+     */
     public function getDiffPath()
     {
         return $this->path . 'diff/';
@@ -132,17 +155,13 @@ class ScreenshotListener implements EventSubscriberInterface
     /**
      * Takes a screenshot if the step passes and compares it to the baseline
      *
-     * @param StepEvent $event
+     * @param ContextInterface $context
+     * @param StepNode $step
      */
-    public function takeScreenshot(StepEvent $event)
+    public function takeScreenshot(ContextInterface $context, StepNode $step)
     {
         // Increment the step number
         $this->stepNumber++;
-
-        if ($event->getResult() !== StepEvent::PASSED) {
-            // Don't screenshot failed steps
-            return;
-        }
 
         if ($this->sleep > 0) {
             // Convert seconds to microseconds
@@ -150,11 +169,11 @@ class ScreenshotListener implements EventSubscriberInterface
         }
 
         $screenshotPath = $this->getScreenshotPath();
-        $screenshotFile = $screenshotPath . $this->getFilepath($event);
+        $screenshotFile = $screenshotPath . $this->getFilepath($step);
         $this->ensureDirectoryExists($screenshotFile);
 
         // Save the screenshot
-        file_put_contents($screenshotFile, $event->getContext()->getSession()->getScreenshot());
+        file_put_contents($screenshotFile, $context->getSession()->getScreenshot());
 
         // Comparison
         $baselinePath = $this->getBaselinePath();
@@ -186,12 +205,16 @@ class ScreenshotListener implements EventSubscriberInterface
                 rename($tempFile, $diffFile);
 
                 // Record the diff for output
-                $this->diffs[spl_object_hash($event->getStep())] = $this->getFilepath($event);
+                $this->diffs[spl_object_hash($step)] = $this->getFilepath($step);
             } elseif (is_file($tempFile)) {
                 // Clean up the temp file
                 unlink($tempFile);
             }
+
+            return $output[0];
         }
+
+        return false;
     }
 
     /**
@@ -252,22 +275,24 @@ class ScreenshotListener implements EventSubscriberInterface
     }
 
     /**
-     * Returns the relative file path for the given feature/scenario/step
-     * @param StepEvent $event
+     * Returns the relative file path for the given step
+     *
+     * @param StepNode $step
      * @return string
      */
-    protected function getFilepath(StepEvent $event)
+    protected function getFilepath($step)
     {
         return sprintf('%s/%s/%d-%s.png',
             $this->formatString($this->currentScenario->getFeature()->getTitle()),
             $this->formatString($this->currentScenario->getTitle()),
             $this->stepNumber,
-            $this->formatString($event->getStep()->getText())
+            $this->formatString($step->getText())
         );
     }
 
     /**
      * Formats a title string into a filename friendly string
+     *
      * @param string $string
      * @return string
      */

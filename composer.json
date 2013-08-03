@@ -18,6 +18,9 @@
         "behat/mink-extension": "~1.1.4",
         "behat/mink-selenium2-driver": "~1.1.1"
     },
+    "suggest": {
+        "zodyac/behat-extensible-html-formatter": "Allows the peceptual diffs to be viewed in the HTML formatter output."
+    },
     "autoload": {
         "psr-0": { "Zodyac\\Behat\\PerceptualDiffExtension": "src/" }
     }

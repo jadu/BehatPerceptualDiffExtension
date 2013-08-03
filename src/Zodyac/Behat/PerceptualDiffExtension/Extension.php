@@ -6,7 +6,9 @@ use Behat\Behat\Extension\ExtensionInterface;
 use Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
+use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Loader\YamlFileLoader;
+use Symfony\Component\DependencyInjection\Reference;
 
 class Extension implements ExtensionInterface
 {
@@ -21,9 +23,27 @@ class Extension implements ExtensionInterface
             $path = $container->getParameter('behat.paths.base') . '/' . $path;
         }
 
-        $container->setParameter('behat.perceptual_diff.path', $path);
-        $container->setParameter('behat.perceptual_diff.sleep', $config['sleep']);
-        $container->setParameter('behat.perceptual_diff.compare', $config['compare']);
+        $container->setParameter('behat.perceptual_diff_extension.path', $path);
+        $container->setParameter('behat.perceptual_diff_extension.sleep', $config['sleep']);
+        $container->setParameter('behat.perceptual_diff_extension.compare', $config['compare']);
+        $container->setParameter('behat.perceptual_diff_extension.fail_on_diff', $config['fail_on_diff']);
+
+        // Override the standard HTML formatter with a more extensible version
+        $formatterClass = 'Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatter';
+        $formatterDispatcherClass = 'Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatterDispatcher';
+        $formatterDispatcherId = 'behat.extensible_html_formatter.formatter.dispatcher.html';
+        if (class_exists($formatterClass) && !$container->hasDefinition($formatterDispatcherId)) {
+            $htmlFormatterDefinition = new Definition($formatterDispatcherClass, array(
+                $formatterClass,
+                'html',
+                'Generates a nice looking HTML report.',
+                new Reference('behat.event_dispatcher')
+            ));
+
+            $htmlFormatterDefinition->addTag('behat.formatter.dispatcher');
+
+            $container->setDefinition($formatterDispatcherId, $htmlFormatterDefinition);
+        }
     }
 
     public function getConfig(ArrayNodeDefinition $builder)
@@ -32,6 +52,7 @@ class Extension implements ExtensionInterface
             ->children()
                 ->scalarNode('path')->cannotBeEmpty()->end()
                 ->scalarNode('sleep')->defaultValue(1)->end()
+                ->booleanNode('fail_on_diff')->defaultValue(true)->end()
                 ->arrayNode('compare')->addDefaultsIfNotSet()
                     ->children()
                         ->scalarNode('fuzz')->defaultValue(20)->end()
