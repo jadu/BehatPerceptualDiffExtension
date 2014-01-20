@@ -13,10 +13,10 @@
     ],
     "require": {
         "php": ">=5.3.2",
-        "behat/behat": "~2.4.6",
-        "behat/mink": "~1.5.0",
-        "behat/mink-extension": "~1.1.4",
-        "behat/mink-selenium2-driver": "~1.1.1"
+        "behat/behat": "~2.4",
+        "behat/mink": "~1.5",
+        "behat/mink-extension": "~1.1",
+        "behat/mink-selenium2-driver": "~1.1"
     },
     "suggest": {
         "zodyac/behat-extensible-html-formatter": "Allows the peceptual diffs to be viewed in the HTML formatter output."
