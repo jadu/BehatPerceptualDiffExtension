@@ -5,7 +5,10 @@ namespace Zodyac\Behat\PerceptualDiffExtension\Comparator;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Behat\Behat\Context\ContextInterface;
 use Behat\Behat\Event\ScenarioEvent;
+use Behat\Behat\Event\SuiteEvent;
 use Behat\Gherkin\Node\StepNode;
+use Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatter;
+use Behat\Behat\Formatter\FormatterManager;
 
 class ScreenshotComparator implements EventSubscriberInterface
 {
@@ -58,19 +61,44 @@ class ScreenshotComparator implements EventSubscriberInterface
      */
     protected $diffs = array();
 
-    public function __construct($path, $sleep, array $compareOptions)
+    /**
+     * Behat context parameters
+     *
+     * @var array
+     */
+    protected static $behatContextParameters;
+
+    /**
+     * Injected FormatterManager
+     *
+     * @var FormatterManager
+     */
+    protected $formatterManager;
+
+    /**
+     * @param string $path
+     * @param int    $sleep
+     * @param array $compareOptions
+     * @param array $behatContextParameters
+     * @param FormatterManager $formatterManager
+     */
+    public function __construct($path, $sleep, array $compareOptions, array $behatContextParameters, FormatterManager $formatterManager=null)
     {
         $this->path = rtrim($path, '/') . '/';
         $this->sleep = (int) $sleep;
         $this->compareOptions = $compareOptions;
         $this->started = new \DateTime();
+        $this->formatterManager =  $formatterManager;
+
+        static::$behatContextParameters = $behatContextParameters;
+
     }
 
     public static function getSubscribedEvents()
     {
         return array(
-            'beforeSuite' => 'clearScreenshotDiffs',
-            'beforeScenario' => 'resetStepCounter'
+            'beforeScenario' => 'resetStepCounter',
+            'afterSuite'     => 'moveBehatHtmlReport'
         );
     }
 
@@ -105,9 +133,13 @@ class ScreenshotComparator implements EventSubscriberInterface
      *
      * @return string
      */
-    public function getScreenshotPath()
+    public function getScreenshotPath($fullPath = true)
     {
-        return $this->path . $this->started->format('YmdHis') . '/';
+        if ($fullPath === true) {
+            return $this->path . $this->started->format('YmdHis') . '/result/';
+        } else {
+            return $this->started->format('YmdHis') . '/result/';
+        }
     }
 
     /**
@@ -115,9 +147,13 @@ class ScreenshotComparator implements EventSubscriberInterface
      *
      * @return string
      */
-    public function getBaselinePath()
+    public function getBaselinePath($fullPath = true)
     {
-        return $this->path . 'baseline/';
+        if ($fullPath === true) {
+            return $this->path . 'baseline/';
+        } else {
+            return 'baseline/';
+        }
     }
 
     /**
@@ -125,19 +161,12 @@ class ScreenshotComparator implements EventSubscriberInterface
      *
      * @return string
      */
-    public function getDiffPath()
+    public function getDiffPath($fullPath = true)
     {
-        return $this->path . 'diff/';
-    }
-
-    /**
-     * Remove all the previous diffs
-     */
-    public function clearScreenshotDiffs()
-    {
-        $diffPath = $this->getDiffPath();
-        if (is_dir($diffPath)) {
-            $this->removeDirectory($diffPath);
+        if ($fullPath === true) {
+            return $this->path . $this->started->format('YmdHis') . '/diff/';
+        } else {
+            return $this->started->format('YmdHis') . '/diff/';
         }
     }
 
@@ -156,9 +185,11 @@ class ScreenshotComparator implements EventSubscriberInterface
      * Takes a screenshot if the step passes and compares it to the baseline
      *
      * @param ContextInterface $context
-     * @param StepNode $step
+     * @param StepNode         $step
+     * @param string           $error
+     * @return true|string     $return
      */
-    public function takeScreenshot(ContextInterface $context, StepNode $step)
+    public function takeScreenshot(ContextInterface $context, StepNode $step, &$error)
     {
         // Increment the step number
         $this->stepNumber++;
@@ -193,28 +224,49 @@ class ScreenshotComparator implements EventSubscriberInterface
 
         // Run the comparison
         $output = array();
+
         exec($this->getCompareCommand($baselineFile, $screenshotFile, $tempFile), $output, $return);
 
-        if ($return === 0 || $return === 1) {
-            // Check that there are some differences
-            if ($return === 1) {
-                $diffFile = str_replace($screenshotPath, $diffPath, $screenshotFile);
-                $this->ensureDirectoryExists($diffFile);
+        switch ($return) {
+            // there is no difference
+            case 0:
+                if (is_file($tempFile)) {
+                    // Clean up the temp file
+                    unlink($tempFile);
+                }
+                return 0;
 
-                // Store the diff
-                rename($tempFile, $diffFile);
+            // pixel difference
+            case 1:
+                $error = sprintf('There was a UI difference of %d', $output[0]);
+                break;
 
-                // Record the diff for output
-                $this->diffs[spl_object_hash($step)] = $this->getFilepath($step);
-            } elseif (is_file($tempFile)) {
-                // Clean up the temp file
-                unlink($tempFile);
-            }
+            // oh we have some issues here, possibly different widths and heights
+            case 2:
+                if (strpos($output[0], 'compare: image widths or heights differ') !== false) {
+                    $error = 'Image widths or heights differ. Imagemagick cannot generate image showing difference.';
+                } else {
+                    $error = $output[0];
+                }
+                break;
 
-            return $output[0];
+            // It's assumed that there are some differences, but we don't know what exactly.
+            default:
+                $error = $output[0];
         }
 
-        return false;
+        $diffFile = str_replace($screenshotPath, $diffPath, $screenshotFile);
+        $this->ensureDirectoryExists($diffFile);
+
+        if (is_file($tempFile)) {
+            // Store the diff
+            rename($tempFile, $diffFile);
+        }
+
+        // Record the diff for output
+        $this->diffs[spl_object_hash($step)] = $this->getFilepath($step);
+
+        return $return;
     }
 
     /**
@@ -282,12 +334,42 @@ class ScreenshotComparator implements EventSubscriberInterface
      */
     protected function getFilepath($step)
     {
-        return sprintf('%s/%s/%d-%s.png',
+        return sprintf('%s/%s/%d-%s/%sx%s.png',
             $this->formatString($this->currentScenario->getFeature()->getTitle()),
             $this->formatString($this->currentScenario->getTitle()),
             $this->stepNumber,
-            $this->formatString($step->getText())
+            $this->formatString($step->getText()),
+            $this->getViewportWidth(),
+            $this->getViewportHeight()
         );
+    }
+
+    /**
+     * Returns the desired viewport width
+     *
+     * @return int
+     */
+    protected function getViewportWidth()
+    {
+        if (isset(static::$behatContextParameters['viewport_width'])) {
+            return static::$behatContextParameters['viewport_width'];
+        }
+
+        return static::$behatContextParameters['default_viewport_width'];
+    }
+
+    /**
+     * Returns the desired viewport height
+     *
+     * @return int
+     */
+    protected function getViewportHeight()
+    {
+        if (isset(static::$behatContextParameters['viewport_height'])) {
+            return static::$behatContextParameters['viewport_height'];
+        }
+
+        return static::$behatContextParameters['default_viewport_height'];
     }
 
     /**

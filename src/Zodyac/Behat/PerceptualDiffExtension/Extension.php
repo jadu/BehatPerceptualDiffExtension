@@ -28,22 +28,22 @@ class Extension implements ExtensionInterface
         $container->setParameter('behat.perceptual_diff_extension.compare', $config['compare']);
         $container->setParameter('behat.perceptual_diff_extension.fail_on_diff', $config['fail_on_diff']);
 
-        // Override the standard HTML formatter with a more extensible version
-        $formatterClass = 'Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatter';
-        $formatterDispatcherClass = 'Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatterDispatcher';
-        $formatterDispatcherId = 'behat.extensible_html_formatter.formatter.dispatcher.html';
-        if (class_exists($formatterClass) && !$container->hasDefinition($formatterDispatcherId)) {
-            $htmlFormatterDefinition = new Definition($formatterDispatcherClass, array(
-                $formatterClass,
-                'html',
-                'Generates a nice looking HTML report.',
-                new Reference('behat.event_dispatcher')
-            ));
-
-            $htmlFormatterDefinition->addTag('behat.formatter.dispatcher');
-
-            $container->setDefinition($formatterDispatcherId, $htmlFormatterDefinition);
-        }
+//        // Override the standard HTML formatter with a more extensible version
+//        $formatterClass = 'Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatter';
+//        $formatterDispatcherClass = 'Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatterDispatcher';
+//        $formatterDispatcherId = 'behat.extensible_html_formatter.formatter.dispatcher.html';
+//        if (class_exists($formatterClass) && !$container->hasDefinition($formatterDispatcherId)) {
+//            $htmlFormatterDefinition = new Definition($formatterDispatcherClass, array(
+//                $formatterClass,
+//                'html',
+//                'Generates a nice looking HTML report.',
+//                new Reference('behat.event_dispatcher')
+//            ));
+//
+//            $htmlFormatterDefinition->addTag('behat.formatter.dispatcher');
+//
+//            $container->setDefinition($formatterDispatcherId, $htmlFormatterDefinition);
+//        }
     }
 
     public function getConfig(ArrayNodeDefinition $builder)

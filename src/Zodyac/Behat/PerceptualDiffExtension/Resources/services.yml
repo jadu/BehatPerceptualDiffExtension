@@ -5,12 +5,30 @@ parameters:
 services:
     behat.perceptual_diff_extension.comparator.screenshot:
         class: Zodyac\Behat\PerceptualDiffExtension\Comparator\ScreenshotComparator
-        arguments: [%behat.perceptual_diff_extension.path%, %behat.perceptual_diff_extension.sleep%, %behat.perceptual_diff_extension.compare%]
+        arguments:
+            - %behat.perceptual_diff_extension.path%
+            - %behat.perceptual_diff_extension.sleep%
+            - %behat.perceptual_diff_extension.compare%
+            - %behat.context.parameters%
         tags:
             - { name: behat.event_subscriber }
 
     behat.perceptual_diff_extension.formatter.listener.html:
         class: Zodyac\Behat\PerceptualDiffExtension\Formatter\HtmlFormatterListener
-        arguments: [@behat.perceptual_diff_extension.comparator.screenshot]
+        arguments:
+            - @behat.perceptual_diff_extension.comparator.screenshot
         tags:
             - { name: behat.event_subscriber }
+
+    zodyac.formatter.dispatcher:
+        class: Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatterDispatcher
+        arguments:
+            - @zodyac.formatter.dispatcher.html
+            - 'html'
+            - 'Generates a nice looking HTML report.'
+            - @behat.event_dispatcher
+        tags:
+            - { name: behat.formatter.dispatcher }
+
+    zodyac.formatter.dispatcher.html:
+        class: Zodyac\Behat\ExtensibleHtmlFormatter\Formatter\ExtensibleHtmlFormatter

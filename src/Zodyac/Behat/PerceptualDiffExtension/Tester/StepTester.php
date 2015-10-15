@@ -67,12 +67,21 @@ class StepTester extends BaseStepTester
      */
     protected function executeStepDefinition(StepNode $step, DefinitionInterface $definition)
     {
-        parent::executeStepDefinition($step, $definition);
+        try {
+            parent::executeStepDefinition($step, $definition);
+        } catch (\Exception $e) {
+            // Ok, step failed, but let's quickly capture screenshot for html report.
+        }
 
-        $diff = $this->screenshotComparator->takeScreenshot($this->context, $step);
+        $diff = $this->screenshotComparator->takeScreenshot($this->context, $step, $error);
+
+        if (isset($e)) {
+            throw $e;
+        }
+
         if ($diff > 0 && $this->failOnDiff) {
             // There were differences between the two screenshots
-            throw new PerceptualDiffException(sprintf('There was a perceptual difference of %d', $diff));
+            throw new PerceptualDiffException($error);
         }
     }
 }

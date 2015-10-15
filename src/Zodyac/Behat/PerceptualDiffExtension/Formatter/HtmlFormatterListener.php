@@ -31,15 +31,15 @@ class HtmlFormatterListener implements EventSubscriberInterface
         $filename = $this->screenshotComparator->getDiff($event->getStep());
         if ($filename !== null) {
             // Output the pdiff section if there was a diff
-            $baselinePath = $this->screenshotComparator->getBaselinePath() . $filename;
-            $diffPath = $this->screenshotComparator->getDiffPath() . $filename;
-            $screenshotPath = $this->screenshotComparator->getScreenshotPath() . $filename;
+            $baselinePath = $this->screenshotComparator->getBaselinePath(false) . $filename;
+            $diffPath = $this->screenshotComparator->getDiffPath(false) . $filename;
+            $screenshotPath = $this->screenshotComparator->getScreenshotPath(false) . $filename;
 
             $html = <<<TEMPLATE
             <div class="pdiff">
-                <a href="file://$baselinePath" target="new"><img alt="Baseline" src="file://$baselinePath" /></a>
-                <a href="file://$diffPath" target="new"><img alt="Diff" src="file://$diffPath" /></a>
-                <a href="file://$screenshotPath" target="new"><img alt="Current" src="file://$screenshotPath" /></a>
+                <a href="./$baselinePath" target="new"><img alt="Baseline" src="./$baselinePath" /></a>
+                <a href="./$screenshotPath" target="new"><img alt="Current" src="./$screenshotPath" /></a>
+                <a href="./$diffPath" target="new"><img alt="Diff" src="./$diffPath" /></a>
             </div>
 TEMPLATE;
 
