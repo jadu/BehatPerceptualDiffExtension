@@ -138,7 +138,7 @@ class ScreenshotComparator implements EventSubscriberInterface
         if ($fullPath === true) {
             return $this->path . $this->started->format('YmdHis') . '/result/';
         } else {
-            return $this->started->format('YmdHis') . '/result';
+            return $this->started->format('YmdHis') . '/result/';
         }
     }
 
@@ -384,18 +384,5 @@ class ScreenshotComparator implements EventSubscriberInterface
         $string = preg_replace('/[\s\-]+/', '-', $string);
 
         return $string;
-    }
-
-    /**
-     * @param SuiteEvent $event
-     */
-    public function moveBehatHtmlReport(SuiteEvent $event)
-    {
-        if ($this->formatterManager !== null) {
-            $old = $this->htmlFormatter->getParameter('output_path');
-            $new = $this->path . $this->started->format('YmdHis') . '/' . basename($old);
-
-            // copy($old, $new);
-        }
     }
 }

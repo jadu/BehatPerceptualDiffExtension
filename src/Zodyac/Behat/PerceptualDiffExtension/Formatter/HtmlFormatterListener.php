@@ -38,8 +38,8 @@ class HtmlFormatterListener implements EventSubscriberInterface
             $html = <<<TEMPLATE
             <div class="pdiff">
                 <a href="./$baselinePath" target="new"><img alt="Baseline" src="./$baselinePath" /></a>
-                <a href="./$diffPath" target="new"><img alt="Diff" src="./$diffPath" /></a>
                 <a href="./$screenshotPath" target="new"><img alt="Current" src="./$screenshotPath" /></a>
+                <a href="./$diffPath" target="new"><img alt="Diff" src="./$diffPath" /></a>
             </div>
 TEMPLATE;
 
